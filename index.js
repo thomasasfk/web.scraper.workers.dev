@@ -1,61 +1,49 @@
-import html from './html.js'
-import contentTypes from './content-types.js'
-import Scraper from './scraper.js'
-import { generateJSONResponse, generateErrorJSONResponse } from './json-response.js'
-
 addEventListener('fetch', event => {
-  event.respondWith(handleRequest(event.request))
+  event.respondWith(handleRequest(event))
 })
 
-async function handleRequest(request) {
+const RESPONSE_HEADERS = {
+  'content-type': 'application/json;charset=UTF-8',
+  'Access-Control-Allow-Origin': '*'
+}
+
+async function handleRequest(event) {
+  const request = event.request
   const searchParams = new URL(request.url).searchParams
 
-  let url = searchParams.get('url')
-  if (url && !url.match(/^[a-zA-Z]+:\/\//)) url = 'http://' + url
-
-  const selector = searchParams.get('selector')
-  const attr = searchParams.get('attr')
-  const spaced = searchParams.get('spaced') // Adds spaces between tags
-  const pretty = searchParams.get('pretty')
-
-  if (!url || !selector) {
-    return handleSiteRequest(request)
+  const clipId = searchParams.get('clipId')
+  if (clipId && !clipId.match(/^[\w-]{36}$/)) {
+    return new Response(
+      JSON.stringify({ 'Error': `Invalid clipId: ${clipId}` }), { headers: RESPONSE_HEADERS }
+    )
   }
 
-  return handleAPIRequest({ url, selector, attr, spaced, pretty })
-}
+  const youtubeClipUrl = `https://www.youtube.com/clip/${clipId}`
 
-async function handleSiteRequest(request) {
-  const url = new URL(request.url)
-
-  if (url.pathname === '/' || url.pathname === '') {
-    return new Response(html, {
-      headers: { 'content-type': contentTypes.html }
-    })
+  const cacheKey = new Request(youtubeClipUrl, request)
+  const cache = caches.default
+  const cachedResponse = await cache.match(cacheKey)
+  if (cachedResponse) {
+    return cachedResponse
   }
 
-  return new Response('Not found', { status: 404 })
-}
+  const response = await fetch(youtubeClipUrl)
+  const responseString = await response.text()
+  let [iframeUrl] = responseString.match(`(?<='|")https://www.youtube.com/embed/.*?\\?clip=${clipId}&amp;clipt=.*?(?='|")`) || [null]
 
-async function handleAPIRequest({ url, selector, attr, spaced, pretty }) {
-  let scraper, result
-
-  try {
-    scraper = await new Scraper().fetch(url)
-  } catch (error) {
-    return generateErrorJSONResponse(error, pretty)
+  let ourApiResponse
+  if (iframeUrl) {
+    iframeUrl = iframeUrl.replace(/&amp;/g, '&')
+    ourApiResponse = new Response(
+      JSON.stringify({ iframeUrl }), { headers: RESPONSE_HEADERS }
+    )
+  } else {
+    ourApiResponse = new Response(
+      JSON.stringify({ 'Error': `Failed to extract embed url for clipId: ${clipId}` }), { headers: RESPONSE_HEADERS }
+    )
   }
 
-  try {
-    if (!attr) {
-      result = await scraper.querySelector(selector).getText({ spaced })
-    } else {
-      result = await scraper.querySelector(selector).getAttribute(attr)
-    }
+  event.waitUntil(cache.put(cacheKey, ourApiResponse.clone()))
 
-  } catch (error) {
-    return generateErrorJSONResponse(error, pretty)
-  }
-
-  return generateJSONResponse({ result }, pretty)
+  return ourApiResponse
 }

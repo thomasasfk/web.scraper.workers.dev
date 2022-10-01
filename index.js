@@ -33,8 +33,10 @@ async function handleRequest(event) {
 
   let ourApiResponse
   if (ogVideoUrlMetaTagMatch) {
+    let iframeUrl = ogVideoUrlMetaTagMatch[1]
+    iframeUrl = iframeUrl.replace(/&amp;/g, '&')
     ourApiResponse = new Response(
-      JSON.stringify({ iframeUrl: ogVideoUrlMetaTagMatch[1] }), { headers: RESPONSE_HEADERS }
+      JSON.stringify({ iframeUrl }), { headers: RESPONSE_HEADERS }
     )
   } else {
     ourApiResponse = new Response(

@@ -29,13 +29,12 @@ async function handleRequest(event) {
 
   const response = await fetch(youtubeClipUrl)
   const responseString = await response.text()
-  let [iframeUrl] = responseString.match(`(?<='|")https://www.youtube.com/embed/.*?\\?clip=${clipId}&amp;clipt=.*?(?='|")`) || [null]
+  let ogVideoUrlMetaTagMatch = responseString.match(/<meta property="og:video:url" content="([^"]+)">/)
 
   let ourApiResponse
-  if (iframeUrl) {
-    iframeUrl = iframeUrl.replace(/&amp;/g, '&')
+  if (ogVideoUrlMetaTagMatch) {
     ourApiResponse = new Response(
-      JSON.stringify({ iframeUrl }), { headers: RESPONSE_HEADERS }
+      JSON.stringify({ iframeUrl: ogVideoUrlMetaTagMatch[1] }), { headers: RESPONSE_HEADERS }
     )
   } else {
     ourApiResponse = new Response(

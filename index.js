@@ -32,9 +32,9 @@ async function handleRequest(event) {
   let ogVideoUrlMetaTagMatch = responseString.match(/<meta property="og:video:url" content="([^"]+)">/)
 
   let ourApiResponse
-  if (ogVideoUrlMetaTagMatch) {
-    let iframeUrl = ogVideoUrlMetaTagMatch[1]
-    iframeUrl = iframeUrl.replace(/&amp;/g, '&')
+  const ytEmbedUrlRegex = /<meta property="og:video:url" content="(https:\/\/www\.youtube\.com\/embed\/[^"]+)/m;
+  if ((m = ytEmbedUrlRegex.exec(responseString)) !== null && m.length > 1) {
+    const iframeUrl = m[1].replace(/&amp;/g, '&')
     ourApiResponse = new Response(
       JSON.stringify({ iframeUrl }), { headers: RESPONSE_HEADERS }
     )
